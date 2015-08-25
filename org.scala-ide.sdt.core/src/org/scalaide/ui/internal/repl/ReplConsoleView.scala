@@ -225,23 +225,6 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
 
     evaluate(preamble)
 
-    view.appendText("Libraries available in the classpath of Scala REPL:\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
-    cp.split(java.io.File.pathSeparator).foreach {path: String =>
-      view.appendText(path + "\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
-    }
-    view.appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
-
-    view.appendText("Libraries available in the classpath of Scala IDE:\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
-    scalaProject.scalaClasspath.fullClasspath.foreach {file: java.io.File =>
-      view.appendText(file.getAbsolutePath + "\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
-    }
-    view.appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
-
-
-
-    view.appendText("Welcome!", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
-    view.appendText("========\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
-
     stopReplAction.setEnabled(true)
 
     setContentDescription("Scala Interpreter (Project: " + projectName + ")")
