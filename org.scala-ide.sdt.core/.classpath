@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry exported="true" kind="lib" path="lib/smcl-public-interfaces_2.11.jar" sourcepath="O:/Kehitys/ivy-cache/local/aalto.smcl/smcl-public-interfaces_2.11/1.0-SNAPSHOT/srcs/smcl-public-interfaces_2.11-sources.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.6"/>
 	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins"/>
 	<classpathentry kind="src" output="target/classes" path="src"/>
 	<classpathentry kind="src" path="src-luna"/>
-	<classpathentry kind="lib" path="target/lib/miglayout-3.7.4.jar"/>
-	<classpathentry kind="lib" path="target/lib/log4j-1.2.17.jar"/>
+	<classpathentry exported="true" kind="lib" path="target/lib/miglayout-3.7.4.jar"/>
+	<classpathentry exported="true" kind="lib" path="target/lib/log4j-1.2.17.jar"/>
+	<classpathentry kind="lib" path="O:/Kehitys/ivy-cache/local/aalto.smcl/smcl-public-interfaces_2.11/1.0-SNAPSHOT/jars/smcl-public-interfaces_2.11.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>

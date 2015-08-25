@@ -9,17 +9,39 @@ import org.eclipse.jdt.internal.ui.JavaPlugin
 import org.eclipse.jdt.ui.PreferenceConstants
 import org.eclipse.jface.resource.JFaceResources
 import org.eclipse.swt.SWT
+import org.eclipse.swt.custom.PaintObjectEvent
+import org.eclipse.swt.custom.PaintObjectListener
 import org.eclipse.swt.custom.SashForm
 import org.eclipse.swt.custom.StyleRange
+import org.eclipse.swt.events.DisposeEvent
+import org.eclipse.swt.events.DisposeListener
+import org.eclipse.swt.events.VerifyEvent
+import org.eclipse.swt.events.VerifyListener
 import org.eclipse.swt.graphics.Color
 import org.eclipse.swt.graphics.Font
+import org.eclipse.swt.graphics.GlyphMetrics
+import org.eclipse.swt.graphics.Image
+import org.eclipse.swt.graphics.ImageData
+import org.eclipse.swt.graphics.PaletteData
+import org.eclipse.swt.graphics.RGB
+import org.eclipse.swt.graphics.Rectangle
 import org.eclipse.swt.layout.FillLayout
 import org.eclipse.swt.widgets.Caret
 import org.eclipse.swt.widgets.Composite
 import org.eclipse.swt.widgets.Display
 import org.eclipse.ui.part.ViewPart
-
 import scalariform.lexer.ScalaLexer
+import java.awt._
+import java.awt.image._
+import aalto.smcl.interfaces.GlobalMetadataInterfaceSourceProviderRegistry
+import aalto.smcl.interfaces.MetadataInterfaceSourceProvider
+import aalto.smcl.interfaces.StaticGeneralBitmapSource
+import aalto.smcl.interfaces.StaticThumbnailBitmapSource
+import aalto.smcl.interfaces.ResourceMetadataSource
+import aalto.smcl.interfaces.ProviderMetadataSource
+
+
+
 
 object InterpreterConsoleView {
   val BackgroundColor = "org.scalaide.ui.color.interpreterBackground"
@@ -85,6 +107,60 @@ trait InterpreterConsoleView extends ViewPart {
     val editorFont = JFaceResources.getFont(PreferenceConstants.EDITOR_TEXT_FONT)
     resultsTextWidget.setFont(editorFont) // java editor font
 
+    resultsTextWidget.addVerifyListener(new VerifyListener()  {
+      override def verifyText(event: VerifyEvent): Unit = {
+        if (event.start == event.end)
+          return
+
+        val text = resultsTextWidget.getText(event.start, event.end - 1)
+
+        var index = text.indexOf('\uFFFC')
+        while (index != -1) {
+          val style = resultsTextWidget.getStyleRangeAtOffset(event.start + index)
+          if (style != null) {
+            val image: Image = style.data.asInstanceOf[Image]
+
+          if (image != null)
+              image.dispose()
+          }
+
+          index = text.indexOf('\uFFFC', index + 1)
+        }
+      }
+    });
+
+    resultsTextWidget.addPaintObjectListener(new PaintObjectListener() {
+      override def paintObject(event: PaintObjectEvent): Unit = {
+        val style: StyleRange = event.style
+        if (style != null) {
+          val image: Image = style.data.asInstanceOf[Image]
+
+          if (!image.isDisposed()) {
+            val x = event.x
+            val y = event.y + event.ascent - style.metrics.ascent
+            event.gc.drawImage(image, x, y)
+          }
+        }
+      }
+    });
+
+    resultsTextWidget.addDisposeListener(new DisposeListener() {
+      override def widgetDisposed(event: DisposeEvent): Unit = {
+        val styles: Array[StyleRange] = resultsTextWidget.getStyleRanges()
+
+        for (i <- 0 to (styles.length - 1)) {
+          val style: StyleRange = styles(i)
+
+          if (style.data != null) {
+            val image: Image = style.data.asInstanceOf[Image]
+
+            if (image != null)
+              image.dispose()
+          }
+        }
+      }
+    });
+
     // 2nd row
     inputCommandField = createCommandField(interpreterPanel, Seq(SWT.BORDER, SWT.MULTI, SWT.H_SCROLL, SWT.V_SCROLL, SWT.RESIZE))
     inputCommandField.setFont(editorFont)
@@ -104,6 +180,98 @@ trait InterpreterConsoleView extends ViewPart {
       val bgColor = Option(textAttribute.getBackground) getOrElse codeBgColor
       appendText(token.text, textAttribute.getForeground, bgColor, textAttribute.getStyle, insertNewline = false)
     }
+    appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+  }
+
+  protected def displayObject(resultObjectOption: Option[Any]): Unit = {
+    if (resultObjectOption.isEmpty)
+      return
+
+    val resultObject = resultObjectOption.get
+
+    val providerSetOption = GlobalMetadataInterfaceSourceProviderRegistry.queryProvidersFor(resultObject)
+    if (providerSetOption == None)
+      return
+
+    var metaInterfaceSourceOption: Option[Any] = None
+    providerSetOption.get.find { provider =>
+      metaInterfaceSourceOption = provider.querySourceFor(resultObject)
+      metaInterfaceSourceOption.isDefined
+    }
+
+    if (metaInterfaceSourceOption.isEmpty)
+      return
+
+    val metaInterfaceSource = metaInterfaceSourceOption.get
+
+    if (!metaInterfaceSource.isInstanceOf[StaticThumbnailBitmapSource])
+      return
+
+    val thumbnailSource = metaInterfaceSource.asInstanceOf[StaticThumbnailBitmapSource]
+
+    if (thumbnailSource.numberOfThumbnailBitmaps() < 1)
+      return
+
+    val maximumWidthInPixels: Int = 1000
+    val maximumHeightInPixels: Int = 200
+    val buffers = thumbnailSource.thumbnailBitmapsOption(maximumWidthInPixels, maximumHeightInPixels)
+
+    buffers.get.foreach { buffer =>
+      val colorModel: DirectColorModel =
+        buffer.getColorModel.asInstanceOf[DirectColorModel]
+
+      val palette: PaletteData =  new PaletteData(
+          colorModel.getRedMask(),
+          colorModel.getGreenMask(),
+          colorModel.getBlueMask())
+
+      val imageData: ImageData = new ImageData(
+          buffer.getWidth(),
+          buffer.getHeight(),
+          colorModel.getPixelSize(),
+          palette)
+
+      for (y <- 0 to (imageData.height - 1); x <- 0 to (imageData.width - 1)) {
+        val rgb = buffer.getRGB(x, y)
+
+        val pixel: Int = palette.getPixel(new RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF))
+
+        imageData.setPixel(x, y, pixel)
+        imageData.setAlpha(x, y, (rgb >> 24) & 0xFF)
+      }
+
+      val display: Display = Display.getCurrent
+      val image: Image = new Image(display, imageData)
+
+      val imageBounds: Rectangle = image.getBounds
+
+
+      resultsTextWidget.append("\uFFFC")
+      val newStyle = new StyleRange()
+      newStyle.start = (resultsTextWidget.getCharCount - 1)
+      newStyle.length = 1
+      newStyle.data = image
+      newStyle.metrics = new GlyphMetrics(imageBounds.height, 0, imageBounds.width)
+      resultsTextWidget.setStyleRange(newStyle)
+    }
+//    val resultedBitmap = resultObjectOption.get.asInstanceOf[Bitmap]
+//
+//    var imageToDisplay = resultedBitmap.toRenderedRepresentation.awtBufferedImage
+//
+//    if (imageToDisplay.getWidth > MaximumWidth || imageToDisplay.getHeight > MaximumHeight) {
+//      val originalImage = imageToDisplay
+//
+//      val factor: Double =
+//        if (imageToDisplay.getWidth > MaximumWidth)
+//          MaximumWidth / imageToDisplay.getWidth.toDouble
+//        else
+//          MaximumHeight / imageToDisplay.getHeight.toDouble
+//
+//      val transform = java.awt.geom.AffineTransform.getScaleInstance(factor, factor)
+//      val transformOp = new java.awt.image.AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
+//      imageToDisplay = transformOp.filter(originalImage, null)
+//    }
+
     appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
   }
 

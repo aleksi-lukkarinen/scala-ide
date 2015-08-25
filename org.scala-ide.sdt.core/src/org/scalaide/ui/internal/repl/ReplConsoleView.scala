@@ -65,16 +65,27 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
       import EclipseRepl._
       import scala.tools.nsc.interpreter.Results._
 
-      override def done(exec: Exec, result: Result, output: String): Unit = {
+      override def done(
+          exec: Exec,
+          resultStatus: scala.tools.nsc.interpreter.IR.Result,
+          interpreterOutputString: String,
+          resultObjectOption: Option[Any],
+          warnings: scala.collection.immutable.List[(Option[(Int, Int)], String)]): Unit = {
+
         run {
           if (exec ne ReplConsoleView.HideBareExit) {
             view.displayCode(exec)
-            result match {
-              case Success => view.displayOutput(output)
-              case Error => view.displayError(output)
-              case Incomplete => view.displayError(
-                (if (output.isEmpty) "" else output + "\n")
-                  + ReplConsoleView.WarnIncomplete)
+            resultStatus match {
+              case Success =>
+                view.displayOutput(interpreterOutputString)
+                view.displayObject(resultObjectOption)
+
+              case Error =>
+                view.displayError(interpreterOutputString)
+
+              case Incomplete =>
+                view.displayError(
+                  (if (interpreterOutputString.isEmpty) "" else interpreterOutputString + "\n") + ReplConsoleView.WarnIncomplete)
             }
           }
         }
@@ -104,6 +115,7 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
     setToolTipText("Erase History and Terminate")
 
     import IInternalDebugUIConstants._
+
     setImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_LCL_TERMINATE))
     setDisabledImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_DLCL_TERMINATE))
     setHoverImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_LCL_TERMINATE))
@@ -118,6 +130,7 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
 
   protected object clearConsoleAction extends Action("Clear Output") {
     setToolTipText("Clear Output")
+
     setImageDescriptor(ConsolePluginImages.getImageDescriptor(IInternalConsoleConstants.IMG_ELCL_CLEAR));
     setDisabledImageDescriptor(ConsolePluginImages.getImageDescriptor(IInternalConsoleConstants.IMG_DLCL_CLEAR));
     setHoverImageDescriptor(ConsolePluginImages.getImageDescriptor(IConsoleConstants.IMG_LCL_CLEAR));
@@ -132,6 +145,7 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
     setToolTipText("Relaunch Interpreter and Replay History")
 
     import IInternalDebugUIConstants._
+
     setImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_ELCL_TERMINATE_AND_RELAUNCH))
     setDisabledImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_DLCL_TERMINATE_AND_RELAUNCH))
     setHoverImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_ELCL_TERMINATE_AND_RELAUNCH))
@@ -146,9 +160,11 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
     setToolTipText("Reset Interpreter and Replay All Commands")
 
     import IInternalDebugUIConstants._
+
     setImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_ELCL_RESTART))
     setDisabledImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_DLCL_RESTART))
     setHoverImageDescriptor(DebugPluginImages.getImageDescriptor(IMG_ELCL_RESTART))
+
     override def run(): Unit = {
       // NOTE: change in behavior - interpreter always reset
       displayError("\n------ Resetting Interpreter and Replaying Command History ------\n")
@@ -191,10 +207,40 @@ class ReplConsoleView extends ViewPart with InterpreterConsoleView {
       pathString = path.toOSString()
       if !cp.contains(pathString)
     } cp = pathString + java.io.File.pathSeparator + cp
+
     settings.classpath.value = cp
+    settings.embeddedDefaults(getClass.getClassLoader)
     // end to do ? move
     repl.init(settings)
     isStopped = false
+
+    val preamble =
+        """import aalto.smcl._
+          |import aalto.smcl.common._
+          |import aalto.smcl.bitmaps._
+          |import aalto.smcl.bitmaps.immutable._
+          |import aalto.smcl.bitmaps.immutable.primitives._
+          |import aalto.smcl.bitmaps.immutable.collections._
+          |""".stripMargin
+
+    evaluate(preamble)
+
+    view.appendText("Libraries available in the classpath of Scala REPL:\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
+    cp.split(java.io.File.pathSeparator).foreach {path: String =>
+      view.appendText(path + "\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+    }
+    view.appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+
+    view.appendText("Libraries available in the classpath of Scala IDE:\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
+    scalaProject.scalaClasspath.fullClasspath.foreach {file: java.io.File =>
+      view.appendText(file.getAbsolutePath + "\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+    }
+    view.appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+
+
+
+    view.appendText("Welcome!", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+    view.appendText("========\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = true)
 
     stopReplAction.setEnabled(true)
 

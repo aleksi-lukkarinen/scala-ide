@@ -2,7 +2,7 @@ package org.scalaide.core.internal.repl
 
 import scala.actors.Actor
 import scala.collection.mutable.ListBuffer
-import scala.tools.nsc.interpreter.Results.Result
+import scala.tools.nsc.interpreter.Results
 import scala.tools.nsc.Settings
 
 import EclipseRepl._
@@ -92,7 +92,14 @@ object EclipseRepl
     def doing(exec: Exec): Unit = {} // on entry to `doit` : `Init`, `Exec`
 
     /** Called after interpretation of a line of code. */
-    def done(exec: Exec, result: Result, output: String): Unit = {}
+    def done(
+        exec: Exec,
+        result: Results.Result,
+        outputText: String,
+        resultObjectOption: Option[Any],
+        warnings: List[(Option[(Int, Int)], String)]): Unit = {
+
+    }
     // at exit from `doit` : `Init`, `Exec`
 
     /** Called just before the `Actor` enters its `Terminated` state. */
@@ -127,7 +134,14 @@ object EclipseRepl
   trait Interpreter
   {
     /** prints the output to `Console.out` */
-    def interpret(e: Exec):Result
+    def interpret(e: Exec): InterpreterResult
+
+    case class InterpreterResult(
+        resultStatus: scala.tools.nsc.interpreter.IR.Result,
+        resultObjectOption: Option[Any],
+        warnings: List[(Option[(Int, Int)], String)]) {
+
+    }
   }
 
   /** Allows plugging in alternate (i.e. test) `Interpreter`s. */
@@ -149,9 +163,20 @@ object EclipseRepl
       intp.initializeSynchronous()
 
       def interpret(e: Exec) = {
-        val r = intp.interpret(e)
+        val resultStatus = intp.interpret(e)
+        val resultObjectOption: Option[Any] = intp.valueOfTerm(intp.mostRecentVar)
+        val warnings: List[(Option[(Int, Int)], String)] =
+          intp.lastWarnings.map { warning =>
+            val position = warning._1
+            if (position.isDefined)
+              (Option((position.line, position.column)), warning._2)
+            else
+              (None, warning._2)
+          }
         intp.reporter.flush()
-        r }
+
+        InterpreterResult(resultStatus, resultObjectOption, warnings)
+      }
     }
   }
 }
@@ -225,12 +250,21 @@ class EclipseRepl(client: Client, builder: Builder) extends Suppress.DeprecatedW
     }
   }
 
-  private def doit(e: Exec, b: BAOS): Unit = {
+  private def doit(lineToExecute: Exec, b: BAOS): Unit = {
     if (intp != null) {
-      client.doing(e)
-      val r = intp.interpret(e)
-      val o = b.toString.trim ; b.reset()
-      client.done(e, r, o)
+      client.doing(lineToExecute)
+
+      val result = intp.interpret(lineToExecute)
+
+      val interpreterOutputString = b.toString.trim
+      b.reset()
+
+      client.done(
+          lineToExecute,
+          result.resultStatus,
+          interpreterOutputString,
+          result.resultObjectOption,
+          result.warnings)
     }
   }
 
