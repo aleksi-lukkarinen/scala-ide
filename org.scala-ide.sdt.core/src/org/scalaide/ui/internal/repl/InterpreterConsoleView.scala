@@ -59,6 +59,9 @@ object InterpreterConsoleView {
 trait InterpreterConsoleView extends ViewPart {
   import InterpreterConsoleView._
 
+  val ImagePaddingTopInPixels = 10
+  val ImagePaddingBottomInPixels = 20
+
   protected var interpreterPanel: SashForm = null
   protected var resultsTextWidget: StyledTextWithSimpleMenu = null
   protected var inputCommandField: CommandFieldWithLineNumbersAndMenu = null
@@ -137,7 +140,7 @@ trait InterpreterConsoleView extends ViewPart {
 
           if (!image.isDisposed()) {
             val x = event.x
-            val y = event.y + event.ascent - style.metrics.ascent
+            val y = event.y + event.ascent - style.metrics.ascent + ImagePaddingTopInPixels
             event.gc.drawImage(image, x, y)
           }
         }
@@ -245,13 +248,12 @@ trait InterpreterConsoleView extends ViewPart {
 
       val imageBounds: Rectangle = image.getBounds
 
-
       resultsTextWidget.append("\uFFFC")
       val newStyle = new StyleRange()
       newStyle.start = (resultsTextWidget.getCharCount - 1)
       newStyle.length = 1
       newStyle.data = image
-      newStyle.metrics = new GlyphMetrics(imageBounds.height, 0, imageBounds.width)
+      newStyle.metrics = new GlyphMetrics(imageBounds.height + ImagePaddingTopInPixels + ImagePaddingBottomInPixels, 0, imageBounds.width)
       resultsTextWidget.setStyleRange(newStyle)
     }
 //    val resultedBitmap = resultObjectOption.get.asInstanceOf[Bitmap]
