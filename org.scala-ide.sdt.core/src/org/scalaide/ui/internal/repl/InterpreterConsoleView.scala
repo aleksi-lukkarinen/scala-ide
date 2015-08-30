@@ -207,74 +207,72 @@ trait InterpreterConsoleView extends ViewPart {
 
     val metaInterfaceSource = metaInterfaceSourceOption.get
 
-    if (!metaInterfaceSource.isInstanceOf[StaticThumbnailBitmapSource])
-      return
+    if (metaInterfaceSource.isInstanceOf[StaticThumbnailBitmapSource]) {
+      val thumbnailSource = metaInterfaceSource.asInstanceOf[StaticThumbnailBitmapSource]
 
-    val thumbnailSource = metaInterfaceSource.asInstanceOf[StaticThumbnailBitmapSource]
+      if (thumbnailSource.numberOfThumbnailBitmaps() < 1)
+        return
 
-    if (thumbnailSource.numberOfThumbnailBitmaps() < 1)
-      return
+      val maximumWidthInPixels: Int = 1000
+      val maximumHeightInPixels: Int = 200
+      val buffers = thumbnailSource.thumbnailBitmapsOption(maximumWidthInPixels, maximumHeightInPixels)
 
-    val maximumWidthInPixels: Int = 1000
-    val maximumHeightInPixels: Int = 200
-    val buffers = thumbnailSource.thumbnailBitmapsOption(maximumWidthInPixels, maximumHeightInPixels)
-
-    buffers.get.foreach { buffer =>
-      val colorModel: DirectColorModel =
-        buffer.getColorModel.asInstanceOf[DirectColorModel]
-
-      val palette: PaletteData =  new PaletteData(
-          colorModel.getRedMask(),
-          colorModel.getGreenMask(),
-          colorModel.getBlueMask())
-
-      val imageData: ImageData = new ImageData(
-          buffer.getWidth(),
-          buffer.getHeight(),
-          colorModel.getPixelSize(),
-          palette)
-
-      for (y <- 0 to (imageData.height - 1); x <- 0 to (imageData.width - 1)) {
-        val rgb = buffer.getRGB(x, y)
-
-        val pixel: Int = palette.getPixel(new RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF))
-
-        imageData.setPixel(x, y, pixel)
-        imageData.setAlpha(x, y, (rgb >> 24) & 0xFF)
-      }
-
-      val display: Display = Display.getCurrent
-      val image: Image = new Image(display, imageData)
-
-      val imageBounds: Rectangle = image.getBounds
-
-      resultsTextWidget.append("\uFFFC")
-      val newStyle = new StyleRange()
-      newStyle.start = (resultsTextWidget.getCharCount - 1)
-      newStyle.length = 1
-      newStyle.data = image
-      newStyle.metrics = new GlyphMetrics(imageBounds.height + ImagePaddingTopInPixels + ImagePaddingBottomInPixels, 0, imageBounds.width)
-      resultsTextWidget.setStyleRange(newStyle)
+      buffers.get.foreach { appendBitmap(_) }
     }
-//    val resultedBitmap = resultObjectOption.get.asInstanceOf[Bitmap]
-//
-//    var imageToDisplay = resultedBitmap.toRenderedRepresentation.awtBufferedImage
-//
-//    if (imageToDisplay.getWidth > MaximumWidth || imageToDisplay.getHeight > MaximumHeight) {
-//      val originalImage = imageToDisplay
-//
-//      val factor: Double =
-//        if (imageToDisplay.getWidth > MaximumWidth)
-//          MaximumWidth / imageToDisplay.getWidth.toDouble
-//        else
-//          MaximumHeight / imageToDisplay.getHeight.toDouble
-//
-//      val transform = java.awt.geom.AffineTransform.getScaleInstance(factor, factor)
-//      val transformOp = new java.awt.image.AffineTransformOp(transform, AffineTransformOp.TYPE_BICUBIC)
-//      imageToDisplay = transformOp.filter(originalImage, null)
-//    }
+    else if (metaInterfaceSource.isInstanceOf[StaticGeneralBitmapSource]) {
+      val generalBitmapSource = metaInterfaceSource.asInstanceOf[StaticGeneralBitmapSource]
+
+      if (generalBitmapSource.numberOfGeneralBitmaps() < 1)
+        return
+
+      val buffers = generalBitmapSource.generalBitmapsOption()
+      buffers.get.foreach { appendBitmap(_) }
+    }
 
     appendText("\n", codeFgColor, codeBgColor, SWT.NORMAL, insertNewline = false)
+  }
+
+  protected def appendBitmap(buffer: BufferedImage): Unit = {
+    val colorModel: DirectColorModel =
+      buffer.getColorModel.asInstanceOf[DirectColorModel]
+
+    val palette: PaletteData =  new PaletteData(
+        colorModel.getRedMask(),
+        colorModel.getGreenMask(),
+        colorModel.getBlueMask())
+
+    val imageData: ImageData = new ImageData(
+        buffer.getWidth(),
+        buffer.getHeight(),
+        colorModel.getPixelSize(),
+        palette)
+
+    for (y <- 0 to (imageData.height - 1); x <- 0 to (imageData.width - 1)) {
+      val rgb = buffer.getRGB(x, y)
+
+      val pixel: Int = palette.getPixel(new RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF))
+
+      imageData.setPixel(x, y, pixel)
+      imageData.setAlpha(x, y, (rgb >> 24) & 0xFF)
+    }
+
+    val display: Display = Display.getCurrent
+    val image: Image = new Image(display, imageData)
+
+    val imageBounds: Rectangle = image.getBounds
+
+    resultsTextWidget.append("\uFFFC")
+    val newStyle = new StyleRange()
+    newStyle.start = (resultsTextWidget.getCharCount - 1)
+    newStyle.length = 1
+    newStyle.data = image
+    newStyle.metrics =
+      new GlyphMetrics(
+          imageBounds.height + ImagePaddingTopInPixels + ImagePaddingBottomInPixels,
+          0,
+          imageBounds.width + 20)
+
+    resultsTextWidget.setStyleRange(newStyle)
   }
 
   protected def displayOutput(text: String) = displayPadded(codeBgColor) {
